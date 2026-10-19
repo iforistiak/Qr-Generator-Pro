@@ -1,0 +1,6 @@
+{
+  "name": "QR Studio Pro - Custom & Batch QR Code Generator",
+  "description": "Professional QR code generator with custom styling, dot patterns, eye markers, frames, logos, batch processing, and vector SVG, PNG, PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
