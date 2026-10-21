@@ -25,6 +25,7 @@ interface QRPreviewProps {
   svgContent: string;
   isGenerating: boolean;
   onSaveToLibrary: () => void;
+  onDownloadSuccess?: (data: { filename: string; format: 'SVG' | 'PNG' | 'PDF'; resolution?: string }) => void;
 }
 
 export const QRPreview: React.FC<QRPreviewProps> = ({
@@ -32,6 +33,7 @@ export const QRPreview: React.FC<QRPreviewProps> = ({
   svgContent,
   isGenerating,
   onSaveToLibrary,
+  onDownloadSuccess,
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [downloadingFormat, setDownloadingFormat] = useState<string | null>(null);
@@ -46,8 +48,14 @@ export const QRPreview: React.FC<QRPreviewProps> = ({
   const handleDownloadPng = async () => {
     try {
       setDownloadingFormat('png');
-      await exportPngFile(svgContent, form.size, `qrcode-${form.type}-${Date.now()}.png`);
+      const filename = `qrcode-${form.type}-${Date.now()}.png`;
+      await exportPngFile(svgContent, form.size, filename);
       showToast(`PNG exported at ${form.size}×${form.size}px!`);
+      onDownloadSuccess?.({
+        filename,
+        format: 'PNG',
+        resolution: `${form.size}×${form.size} px`,
+      });
     } catch (err) {
       console.error(err);
       showToast('Error exporting PNG');
@@ -59,8 +67,14 @@ export const QRPreview: React.FC<QRPreviewProps> = ({
   const handleDownloadSvg = () => {
     try {
       setDownloadingFormat('svg');
-      exportSvgFile(svgContent, `qrcode-${form.type}-${Date.now()}.svg`);
+      const filename = `qrcode-${form.type}-${Date.now()}.svg`;
+      exportSvgFile(svgContent, filename);
       showToast('Vector SVG downloaded!');
+      onDownloadSuccess?.({
+        filename,
+        format: 'SVG',
+        resolution: 'Infinite Vector Scalability',
+      });
     } catch (err) {
       console.error(err);
       showToast('Error exporting SVG');
@@ -72,12 +86,18 @@ export const QRPreview: React.FC<QRPreviewProps> = ({
   const handleDownloadPdf = async () => {
     try {
       setDownloadingFormat('pdf');
+      const filename = `qrcode-${form.type}-${Date.now()}.pdf`;
       await exportPdfFile(
         svgContent,
         `QR Code - ${form.type.toUpperCase()}`,
-        `qrcode-${form.type}-${Date.now()}.pdf`
+        filename
       );
       showToast('Press-ready PDF generated!');
+      onDownloadSuccess?.({
+        filename,
+        format: 'PDF',
+        resolution: 'A4 Document (300 DPI)',
+      });
     } catch (err) {
       console.error(err);
       showToast('Error exporting PDF');

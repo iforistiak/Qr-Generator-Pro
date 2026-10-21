@@ -34,6 +34,8 @@ import { BatchProcessor } from './components/BatchProcessor';
 import { SavedDashboard } from './components/SavedDashboard';
 import { PresetModal } from './components/PresetModal';
 import { PresetBar } from './components/PresetBar';
+import { DownloadSuccessModal, DownloadModalData } from './components/DownloadSuccessModal';
+import { FeedbackSection } from './components/FeedbackSection';
 import { Footer } from './components/Footer';
 
 const LOCAL_STORAGE_KEY = 'qr_studio_pro_saved_v2';
@@ -45,7 +47,18 @@ export default function App() {
     try {
       const savedDraft = localStorage.getItem('qr_studio_draft_v2');
       if (savedDraft) {
-        return { ...DEFAULT_FORM_VALUES, ...JSON.parse(savedDraft) };
+        const parsed = JSON.parse(savedDraft);
+        return {
+          ...DEFAULT_FORM_VALUES,
+          ...parsed,
+          wifi: { ...DEFAULT_FORM_VALUES.wifi, ...(parsed?.wifi || {}) },
+          vcard: { ...DEFAULT_FORM_VALUES.vcard, ...(parsed?.vcard || {}) },
+          email: { ...DEFAULT_FORM_VALUES.email, ...(parsed?.email || {}) },
+          location: { ...DEFAULT_FORM_VALUES.location, ...(parsed?.location || {}) },
+          event: { ...DEFAULT_FORM_VALUES.event, ...(parsed?.event || {}) },
+          paypal: { ...DEFAULT_FORM_VALUES.paypal, ...(parsed?.paypal || {}) },
+          bitcoin: { ...DEFAULT_FORM_VALUES.bitcoin, ...(parsed?.bitcoin || {}) },
+        };
       }
     } catch {
       // fallback
@@ -56,6 +69,8 @@ export default function App() {
   const [svgContent, setSvgContent] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
   const [openSection, setOpenSection] = useState<string | null>('colors');
+  const [downloadModalData, setDownloadModalData] = useState<DownloadModalData | null>(null);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [savedCodes, setSavedCodes] = useState<SavedQRCode[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -98,8 +113,9 @@ export default function App() {
         const rawSvg = await generateBaseQrSvg(form, 360);
         const completeSvg = assembleFramedSvg(rawSvg, form);
         setSvgContent(completeSvg);
-      } catch (err) {
-        console.error('QR Generation error:', err);
+      } catch (err: any) {
+        const msg = err instanceof Error ? err.message : String(err?.message || 'Vector render notice');
+        console.warn('[QR Studio Pro] Vector generation notice:', msg);
       } finally {
         setIsGenerating(false);
       }
@@ -182,6 +198,11 @@ export default function App() {
       ...prev,
       ...preset.values,
     }));
+  };
+
+  const triggerDownloadCelebration = (data: DownloadModalData) => {
+    setDownloadModalData(data);
+    setIsDownloadModalOpen(true);
   };
 
   return (
@@ -347,6 +368,7 @@ export default function App() {
                   svgContent={svgContent}
                   isGenerating={isGenerating}
                   onSaveToLibrary={handleSaveToLibrary}
+                  onDownloadSuccess={triggerDownloadCelebration}
                 />
 
                 {/* Real-Time Optical Scannability & Contrast Analysis */}
@@ -358,11 +380,19 @@ export default function App() {
 
         {/* BARCODE STUDIO MODE */}
         {activeTab === 'barcode' && (
-          <BarcodeStudio onSaveToLibrary={handleSaveBarcodeToLibrary} />
+          <BarcodeStudio
+            onSaveToLibrary={handleSaveBarcodeToLibrary}
+            onDownloadSuccess={triggerDownloadCelebration}
+          />
         )}
 
         {/* BATCH PROCESSOR MODE */}
-        {activeTab === 'batch' && <BatchProcessor currentForm={form} />}
+        {activeTab === 'batch' && (
+          <BatchProcessor
+            currentForm={form}
+            onDownloadSuccess={triggerDownloadCelebration}
+          />
+        )}
 
         {/* SAVED LIBRARY DASHBOARD MODE */}
         {activeTab === 'library' && (
@@ -371,6 +401,7 @@ export default function App() {
             onLoadConfig={handleLoadConfig}
             onDeleteCode={handleDeleteCode}
             onClearAll={handleClearAllCodes}
+            onDownloadSuccess={triggerDownloadCelebration}
           />
         )}
       </main>
@@ -381,6 +412,16 @@ export default function App() {
         onClose={() => setIsPresetModalOpen(false)}
         onSelectPreset={handleSelectPreset}
         currentForm={form}
+      />
+
+      {/* Always Live Community Feedback & Voting (Directly above Footer) */}
+      <FeedbackSection />
+
+      {/* Download Success Pop-up Modal */}
+      <DownloadSuccessModal
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+        data={downloadModalData}
       />
 
       {/* Clean Minimal Footer (Exact user specifications: main line + copyright only) */}

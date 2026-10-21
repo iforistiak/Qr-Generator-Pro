@@ -19,6 +19,7 @@ interface SavedDashboardProps {
   onLoadConfig: (config: QRFormValues) => void;
   onDeleteCode: (id: string) => void;
   onClearAll: () => void;
+  onDownloadSuccess?: (data: { filename: string; format: 'SVG' | 'PNG' | 'PDF'; resolution?: string }) => void;
 }
 
 export const SavedDashboard: React.FC<SavedDashboardProps> = ({
@@ -26,6 +27,7 @@ export const SavedDashboard: React.FC<SavedDashboardProps> = ({
   onLoadConfig,
   onDeleteCode,
   onClearAll,
+  onDownloadSuccess,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -160,9 +162,15 @@ export const SavedDashboard: React.FC<SavedDashboardProps> = ({
                 <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
-                    onClick={() =>
-                      exportSvgFile(item.previewSvg, `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.svg`)
-                    }
+                    onClick={() => {
+                      const filename = `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.svg`;
+                      exportSvgFile(item.previewSvg, filename);
+                      onDownloadSuccess?.({
+                        filename,
+                        format: 'SVG',
+                        resolution: 'Scalable Vector SVG',
+                      });
+                    }}
                     className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     title="Vector SVG"
                   >
@@ -172,13 +180,19 @@ export const SavedDashboard: React.FC<SavedDashboardProps> = ({
 
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      const filename = `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
                       exportPngFile(
                         item.previewSvg,
                         item.config.size || 1000,
-                        `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`
-                      )
-                    }
+                        filename
+                      );
+                      onDownloadSuccess?.({
+                        filename,
+                        format: 'PNG',
+                        resolution: `${item.config.size || 1000}×${item.config.size || 1000} px`,
+                      });
+                    }}
                     className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     title="High-Res PNG"
                   >
@@ -188,13 +202,19 @@ export const SavedDashboard: React.FC<SavedDashboardProps> = ({
 
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      const filename = `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.pdf`;
                       exportPdfFile(
                         item.previewSvg,
                         item.title,
-                        `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.pdf`
-                      )
-                    }
+                        filename
+                      );
+                      onDownloadSuccess?.({
+                        filename,
+                        format: 'PDF',
+                        resolution: 'A4 Press Sheet (300 DPI)',
+                      });
+                    }}
                     className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     title="Print PDF"
                   >

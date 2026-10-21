@@ -14,7 +14,38 @@
     <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   </head>
   <body class="overflow-x-hidden w-full max-w-full min-h-screen antialiased bg-slate-50 text-slate-900">
-    <div id="root" class="w-full max-w-full overflow-x-hidden min-h-screen"></div>
+    <div id="root" class="w-full max-w-full overflow-x-hidden min-h-screen">
+      <!-- Instant Fast Zero-Lag Preloader (Replaced automatically when React mounts) -->
+      <div id="app-preloader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 50%,#f0fdf4 100%);font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;color:#0f172a;text-align:center;padding:24px;">
+        <div style="position:relative;margin-bottom:20px;">
+          <div style="position:absolute;inset:-8px;background:linear-gradient(135deg,#38bdf8,#6366f1);border-radius:24px;filter:blur(16px);opacity:0.35;animation:pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;"></div>
+          <div style="position:relative;width:58px;height:58px;border-radius:20px;background:linear-gradient(135deg,#2563eb,#4f46e5,#06b6d4);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 30px -6px rgba(37,99,235,0.45);">
+            <svg style="width:30px;height:30px;fill:none;stroke:#ffffff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+          </div>
+        </div>
+        <div style="font-size:20px;font-weight:900;letter-spacing:-0.03em;margin-bottom:6px;color:#0f172a;">
+          QR Studio<span style="color:#2563eb;">Pro</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#475569;font-weight:600;margin-bottom:16px;">
+          <div style="width:14px;height:14px;border:2.5px solid #2563eb;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
+          <span>Loading Vector Engines & Studio...</span>
+        </div>
+        <div style="width:160px;height:4px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-bottom:18px;">
+          <div style="width:50%;height:100%;background:linear-gradient(90deg,#2563eb,#6366f1);border-radius:999px;animation:progress 1.2s ease-in-out infinite;"></div>
+        </div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:600;letter-spacing:0.02em;">Develop and Deployed by MD ISTIAK ISLAM</div>
+        <style>
+          @keyframes spin{to{transform:rotate(360deg)}}
+          @keyframes pulse{0%,100%{opacity:0.35}50%{opacity:0.65}}
+          @keyframes progress{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+        </style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

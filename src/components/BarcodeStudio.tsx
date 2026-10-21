@@ -23,6 +23,7 @@ import { exportSvgFile, printQrCode, copySvgCode } from '../utils/qrRenderer';
 
 interface BarcodeStudioProps {
   onSaveToLibrary: (item: { title: string; type: any; previewSvg: string; config: any }) => void;
+  onDownloadSuccess?: (data: { filename: string; format: 'SVG' | 'PNG' | 'PDF'; resolution?: string }) => void;
 }
 
 const BARCODE_FORMATS: { id: BarcodeFormat; name: string; example: string; desc: string }[] = [
@@ -36,7 +37,7 @@ const BARCODE_FORMATS: { id: BarcodeFormat; name: string; example: string; desc:
   { id: 'MSI', name: 'MSI Plessey', example: '123456', desc: 'Storage shelves & inventory control' },
 ];
 
-export const BarcodeStudio: React.FC<BarcodeStudioProps> = ({ onSaveToLibrary }) => {
+export const BarcodeStudio: React.FC<BarcodeStudioProps> = ({ onSaveToLibrary, onDownloadSuccess }) => {
   const [form, setForm] = useState<BarcodeFormValues>(DEFAULT_BARCODE_VALUES);
   const [svgContent, setSvgContent] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -71,24 +72,42 @@ export const BarcodeStudio: React.FC<BarcodeStudioProps> = ({ onSaveToLibrary })
 
   const handleDownloadSvg = () => {
     if (!svgContent) return;
-    exportSvgFile(svgContent, `barcode-${form.format.toLowerCase()}-${form.value}.svg`);
+    const filename = `barcode-${form.format.toLowerCase()}-${form.value}.svg`;
+    exportSvgFile(svgContent, filename);
     showToast('Barcode SVG downloaded!');
+    onDownloadSuccess?.({
+      filename,
+      format: 'SVG',
+      resolution: 'Scalable Vector Barcode',
+    });
   };
 
   const handleDownloadPng = async () => {
     if (!svgContent) return;
-    await exportBarcodePng(svgContent, `barcode-${form.format.toLowerCase()}-${form.value}.png`);
+    const filename = `barcode-${form.format.toLowerCase()}-${form.value}.png`;
+    await exportBarcodePng(svgContent, filename);
     showToast('Barcode PNG downloaded!');
+    onDownloadSuccess?.({
+      filename,
+      format: 'PNG',
+      resolution: '1200 px High-Res',
+    });
   };
 
   const handleDownloadPdf = async () => {
     if (!svgContent) return;
+    const filename = `barcode-${form.format.toLowerCase()}.pdf`;
     await exportBarcodePdf(
       svgContent,
       `${form.format} Barcode: ${form.value}`,
-      `barcode-${form.format.toLowerCase()}.pdf`
+      filename
     );
     showToast('Print-ready PDF exported!');
+    onDownloadSuccess?.({
+      filename,
+      format: 'PDF',
+      resolution: 'A6 Press Sheet (300 DPI)',
+    });
   };
 
   const handlePrint = () => {

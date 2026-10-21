@@ -24,6 +24,7 @@ import {
 
 interface BatchProcessorProps {
   currentForm: QRFormValues;
+  onDownloadSuccess?: (data: { filename: string; format: 'SVG' | 'PNG' | 'PDF' | 'ZIP'; resolution?: string }) => void;
 }
 
 const SAMPLE_BATCH = [
@@ -34,7 +35,7 @@ const SAMPLE_BATCH = [
   'https://company.com/support, 24/7 Customer Support',
 ];
 
-export const BatchProcessor: React.FC<BatchProcessorProps> = ({ currentForm }) => {
+export const BatchProcessor: React.FC<BatchProcessorProps> = ({ currentForm, onDownloadSuccess }) => {
   const [inputText, setInputText] = useState<string>(SAMPLE_BATCH.join('\n'));
   const [items, setItems] = useState<BatchItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -181,6 +182,12 @@ export const BatchProcessor: React.FC<BatchProcessorProps> = ({ currentForm }) =
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
+      onDownloadSuccess?.({
+        filename: `${folderName}.zip`,
+        format: 'ZIP',
+        resolution: `${readyItems.length} QR Codes (${exportFormat.toUpperCase()})`,
+      });
     } catch (err) {
       console.error(err);
       alert('Error creating ZIP archive');
@@ -374,9 +381,15 @@ export const BatchProcessor: React.FC<BatchProcessorProps> = ({ currentForm }) =
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                     <button
                       type="button"
-                      onClick={() =>
-                        exportSvgFile(item.svgData!, `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.svg`)
-                      }
+                      onClick={() => {
+                        const filename = `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.svg`;
+                        exportSvgFile(item.svgData!, filename);
+                        onDownloadSuccess?.({
+                          filename,
+                          format: 'SVG',
+                          resolution: 'Scalable Vector SVG',
+                        });
+                      }}
                       className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <FileCode className="w-3.5 h-3.5" />
@@ -385,13 +398,15 @@ export const BatchProcessor: React.FC<BatchProcessorProps> = ({ currentForm }) =
 
                     <button
                       type="button"
-                      onClick={() =>
-                        exportPngFile(
-                          item.svgData!,
-                          currentForm.size,
-                          `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`
-                        )
-                      }
+                      onClick={() => {
+                        const filename = `${item.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
+                        exportPngFile(item.svgData!, currentForm.size, filename);
+                        onDownloadSuccess?.({
+                          filename,
+                          format: 'PNG',
+                          resolution: `${currentForm.size}×${currentForm.size} px`,
+                        });
+                      }}
                       className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <FileImage className="w-3.5 h-3.5" />

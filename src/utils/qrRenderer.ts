@@ -67,37 +67,46 @@ export async function generateBaseQrSvg(form: QRFormValues, baseSize = 360): Pro
   // Safe logo sizing (max 0.35 to preserve scanability)
   const imageSize = Math.max(0.1, Math.min(0.35, form.logoSize / 100));
 
-  const qrCode = new QRCodeStyling({
-    width: baseSize,
-    height: baseSize,
-    type: 'svg',
-    data,
-    margin: form.margin,
-    qrOptions: {
-      errorCorrectionLevel: (form.logoUrl ? 'Q' : form.precision) as QRErrorLevel,
-    },
-    image: form.logoUrl || undefined,
-    imageOptions: {
-      hideBackgroundDots: form.removeLogoBackground,
-      imageSize,
-      margin: form.logoPadding,
-      crossOrigin: 'anonymous',
-    },
-    dotsOptions,
-    cornersSquareOptions,
-    cornersDotOptions,
-    backgroundOptions,
-  });
+    try {
+      const qrCode = new QRCodeStyling({
+        width: baseSize,
+        height: baseSize,
+        type: 'svg',
+        data,
+        margin: form.margin,
+        qrOptions: {
+          errorCorrectionLevel: (form.logoUrl ? 'Q' : form.precision) as QRErrorLevel,
+        },
+        image: form.logoUrl || undefined,
+        imageOptions: {
+          hideBackgroundDots: form.removeLogoBackground,
+          imageSize,
+          margin: form.logoPadding,
+          crossOrigin: 'anonymous',
+        },
+        dotsOptions,
+        cornersSquareOptions,
+        cornersDotOptions,
+        backgroundOptions,
+      });
 
-  const raw = await qrCode.getRawData('svg');
-  if (!raw) {
-    throw new Error('Failed to generate QR Code SVG');
+      const raw = await qrCode.getRawData('svg');
+      if (!raw) {
+        throw new Error('Failed to generate QR Code SVG');
+      }
+      if (typeof (raw as any).text === 'function') {
+        return await (raw as Blob).text();
+      }
+      return (raw as any).toString('utf-8');
+    } catch (err: any) {
+      if (form.logoUrl) {
+        // Fallback to rendering without corrupt/unreachable logo
+        console.warn('[QR Studio Pro] Logo rendering failed, falling back to logo-free vector:', err);
+        return generateBaseQrSvg({ ...form, logoUrl: '' }, baseSize);
+      }
+      throw err instanceof Error ? err : new Error(String(err?.message || 'QR code generation failed'));
+    }
   }
-  if (typeof (raw as any).text === 'function') {
-    return await (raw as Blob).text();
-  }
-  return (raw as any).toString('utf-8');
-}
 
 // Strip outer <svg> and extract inner content with width & height preservation
 function extractSvgInner(svgString: string): { inner: string; viewBox: string; width: number; height: number } {
@@ -386,56 +395,86 @@ export async function exportPngFile(
   return blob;
 }
 
+// Helper to ensure proper XML namespaces on SVG for canvas rasterization
+function prepareSvgForRasterization(svgString: string): string {
+  let s = svgString.trim();
+  if (!s.includes('xmlns="http://www.w3.org/2000/svg"')) {
+    s = s.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  if (!s.includes('xmlns:xlink="http://www.w3.org/1999/xlink"')) {
+    s = s.replace('<svg', '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+  }
+  return s;
+}
+
 // Convert SVG to PNG Blob via high-res Canvas
 export function svgToPngBlob(svgString: string, targetWidth = 1000): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
+    try {
+      const sanitizedSvg = prepareSvgForRasterization(svgString);
+      const svgBlob = new Blob([sanitizedSvg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
 
-    img.onload = () => {
-      const origW = img.naturalWidth || 440;
-      const origH = img.naturalHeight || 550;
-      const scale = targetWidth / origW;
-      const canvasWidth = targetWidth;
-      const canvasHeight = Math.round(origH * scale);
+      let settled = false;
 
-      const canvas = document.createElement('canvas');
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      const ctx = canvas.getContext('2d');
+      img.onload = () => {
+        if (settled) return;
+        settled = true;
+        try {
+          const origW = img.naturalWidth || img.width || 440;
+          const origH = img.naturalHeight || img.height || 550;
+          const scale = targetWidth / Math.max(1, origW);
+          const canvasWidth = targetWidth;
+          const canvasHeight = Math.max(1, Math.round(origH * scale));
 
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        reject(new Error('Canvas 2D context not supported'));
-        return;
-      }
+          const canvas = document.createElement('canvas');
+          canvas.width = canvasWidth;
+          canvas.height = canvasHeight;
+          const ctx = canvas.getContext('2d');
 
-      // Smooth rendering
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-
-      canvas.toBlob(
-        (pngBlob) => {
-          URL.revokeObjectURL(url);
-          if (pngBlob) {
-            resolve(pngBlob);
-          } else {
-            reject(new Error('Failed to create PNG blob'));
+          if (!ctx) {
+            URL.revokeObjectURL(url);
+            reject(new Error('Canvas 2D context not supported on this browser'));
+            return;
           }
-        },
-        'image/png',
-        1.0
-      );
-    };
 
-    img.onerror = (err) => {
-      URL.revokeObjectURL(url);
-      reject(err);
-    };
+          // Smooth rendering
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
 
-    img.src = url;
+          canvas.toBlob(
+            (pngBlob) => {
+              URL.revokeObjectURL(url);
+              if (pngBlob) {
+                resolve(pngBlob);
+              } else {
+                reject(new Error('Failed to create PNG blob from canvas'));
+              }
+            },
+            'image/png',
+            1.0
+          );
+        } catch (err: any) {
+          URL.revokeObjectURL(url);
+          reject(err instanceof Error ? err : new Error(String(err?.message || 'Error drawing SVG to canvas')));
+        }
+      };
+
+      img.onerror = () => {
+        if (settled) return;
+        settled = true;
+        URL.revokeObjectURL(url);
+        // Do NOT reject with raw event object
+        reject(new Error('SVG image failed to rasterize'));
+      };
+
+      img.src = url;
+    } catch (err: any) {
+      reject(err instanceof Error ? err : new Error(String(err?.message || 'Rasterization failed to initialize')));
+    }
   });
 }
 
@@ -448,117 +487,127 @@ export async function exportPdfFile(
   const pngBlob = await svgToPngBlob(svgString, 1600);
   const reader = new FileReader();
 
-  return new Promise<void>((resolve) => {
+  return new Promise<void>((resolve, reject) => {
     reader.onload = () => {
-      const base64Data = reader.result as string;
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
+      try {
+        const base64Data = reader.result as string;
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4',
+        });
 
-      // Page dimensions
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+        // Page dimensions
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
 
-      // Header
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(22);
-      pdf.setTextColor(30, 41, 59);
-      pdf.text(title, pageWidth / 2, 25, { align: 'center' });
+        // Header
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(22);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(title, pageWidth / 2, 25, { align: 'center' });
 
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor(100, 116, 139);
-      pdf.text('Scan with your smartphone camera or QR reader', pageWidth / 2, 33, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text('Scan with your smartphone camera or QR reader', pageWidth / 2, 33, { align: 'center' });
 
-      // Calculate image placement
-      const imgWidth = 140; // mm
-      const imgHeight = 160; // mm
-      const x = (pageWidth - imgWidth) / 2;
-      const y = 45;
+        // Calculate image placement
+        const imgWidth = 140; // mm
+        const imgHeight = 160; // mm
+        const x = (pageWidth - imgWidth) / 2;
+        const y = 45;
 
-      pdf.addImage(base64Data, 'PNG', x, y, imgWidth, imgHeight);
+        pdf.addImage(base64Data, 'PNG', x, y, imgWidth, imgHeight);
 
-      // Footer
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Generated with QR Studio Pro - High Precision Vector Standards', pageWidth / 2, pageHeight - 15, {
-        align: 'center',
-      });
+        // Footer
+        pdf.setFontSize(9);
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('Generated with QR Studio Pro - High Precision Vector Standards', pageWidth / 2, pageHeight - 15, {
+          align: 'center',
+        });
 
-      pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
-      resolve();
+        pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+        resolve();
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
+    reader.onerror = () => {
+      reject(new Error('Failed to read PNG data for PDF'));
     };
     reader.readAsDataURL(pngBlob);
   });
 }
 
-// Print QR code directly
+// Print QR code directly using a clean, sandbox-safe invisible iframe
 export async function printQrCode(svgString: string, title = 'Print QR Code') {
-  const pngBlob = await svgToPngBlob(svgString, 1400);
-  const blobUrl = URL.createObjectURL(pngBlob);
+  try {
+    const pngBlob = await svgToPngBlob(svgString, 1400);
+    const blobUrl = URL.createObjectURL(pngBlob);
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    alert('Please allow popups to print your QR code.');
-    return;
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${escapeXml(title)}</title>
+            <style>
+              @page { size: A4 portrait; margin: 20mm; }
+              body {
+                font-family: system-ui, -apple-system, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 80vh;
+                margin: 0;
+                text-align: center;
+                color: #0f172a;
+              }
+              h1 { font-size: 26px; margin-bottom: 6px; font-weight: 700; }
+              p { font-size: 14px; color: #64748b; margin-top: 0; margin-bottom: 28px; }
+              img { max-width: 480px; width: 80%; height: auto; border-radius: 12px; }
+              .footer { margin-top: 36px; font-size: 11px; color: #94a3b8; }
+            </style>
+          </head>
+          <body>
+            <h1>${escapeXml(title)}</h1>
+            <p>Point your smartphone camera to scan</p>
+            <img src="${blobUrl}" onload="setTimeout(function(){ window.focus(); window.print(); }, 250);" />
+            <div class="footer">QR Studio Pro • Vector Print Engine</div>
+          </body>
+        </html>
+      `);
+      doc.close();
+    }
+
+    setTimeout(() => {
+      try {
+        if (iframe.parentNode) {
+          document.body.removeChild(iframe);
+        }
+        URL.revokeObjectURL(blobUrl);
+      } catch {
+        // ignore
+      }
+    }, 10000);
+  } catch (err) {
+    console.warn('[QR Studio Pro] Print preview failed:', err);
   }
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>${escapeXml(title)}</title>
-        <style>
-          @page {
-            size: A4 portrait;
-            margin: 20mm;
-          }
-          body {
-            font-family: system-ui, -apple-system, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 80vh;
-            margin: 0;
-            text-align: center;
-            color: #0f172a;
-          }
-          h1 {
-            font-size: 26px;
-            margin-bottom: 6px;
-            font-weight: 700;
-          }
-          p {
-            font-size: 14px;
-            color: #64748b;
-            margin-top: 0;
-            margin-bottom: 28px;
-          }
-          img {
-            max-width: 480px;
-            width: 80%;
-            height: auto;
-            border-radius: 12px;
-          }
-          .footer {
-            margin-top: 36px;
-            font-size: 11px;
-            color: #94a3b8;
-          }
-        </style>
-      </head>
-      <body>
-        <h1>${escapeXml(title)}</h1>
-        <p>Point your smartphone camera to scan</p>
-        <img src="${blobUrl}" onload="window.print();" />
-        <div class="footer">QR Studio Pro • Vector Print Engine</div>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
 }
 
 // Copy SVG code to clipboard
